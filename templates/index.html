@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Formula Stock Screener</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom tooltip arrow & animation support */
+        .tooltip-card {
+            pointer-events: none;
+            transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-6 border-b border-gray-700 pb-4">
+            <h1 class="text-3xl font-bold text-emerald-400">Magic Formula Stock Screener</h1>
+            <p class="text-gray-400 mt-1">Based on Joel Greenblatt's value investing strategy.</p>
+        </header>
+
+        <!-- Form Controls -->
+        <form method="POST" class="bg-gray-800 p-6 rounded-lg shadow-md mb-8">
+            <!-- Stock Preset Selection Buttons -->
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2 text-gray-300">Quick Load Presets:</label>
+                <div class="flex flex-wrap gap-2">
+                    <button type="submit" name="preset" value="sp500_top" class="px-3 py-1.5 text-xs font-semibold rounded bg-gray-700 hover:bg-emerald-600 text-gray-200 hover:text-white border border-gray-600 transition">
+                        📊 S&P 500 Leaders
+                    </button>
+                    <button type="submit" name="preset" value="tech_leaders" class="px-3 py-1.5 text-xs font-semibold rounded bg-gray-700 hover:bg-emerald-600 text-gray-200 hover:text-white border border-gray-600 transition">
+                        💻 Tech Leaders
+                    </button>
+                    <button type="submit" name="preset" value="dividend_giants" class="px-3 py-1.5 text-xs font-semibold rounded bg-gray-700 hover:bg-emerald-600 text-gray-200 hover:text-white border border-gray-600 transition">
+                        💰 Dividend Giants
+                    </button>
+                    <button type="submit" name="preset" value="default" class="px-3 py-1.5 text-xs font-semibold rounded bg-gray-700 hover:bg-emerald-600 text-gray-200 hover:text-white border border-gray-600 transition">
+                        🔄 Default List
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium mb-2 text-gray-300">Ticker Symbols (Comma Separated)</label>
+                    <textarea name="tickers" rows="3" class="w-full bg-gray-700 text-white rounded p-3 border border-gray-600 focus:outline-none focus:border-emerald-500 font-mono text-sm">{{ tickers_input }}</textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-gray-300">Min Market Cap ($ Millions)</label>
+                    <input type="number" name="min_market_cap" value="{{ min_cap }}" class="w-full bg-gray-700 text-white rounded p-3 border border-gray-600 focus:outline-none focus:border-emerald-500">
+                    
+                    <div class="mt-4 flex items-center">
+                        <input type="checkbox" name="exclude_fin_util" id="exclude_fin_util" {% if exclude_fin_util %}checked{% endif %} class="h-4 w-4 text-emerald-600 rounded">
+                        <label for="exclude_fin_util" class="ml-2 text-sm text-gray-300">Exclude Financials & Utilities</label>
+                    </div>
+
+                    <button type="submit" class="mt-6 w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded transition">Screen Stocks</button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Results Table (pt-12 provides clearance for top-popping tooltips) -->
+        <div class="bg-gray-800 rounded-lg shadow pt-12 overflow-x-visible">
+            <table class="w-full text-left text-sm text-gray-300">
+                <thead class="bg-gray-700 text-gray-200 uppercase text-xs">
+                    <tr>
+                        <!-- Rank -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>Rank <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-64 z-50 top-full mt-2 left-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Final Magic Rank</p>
+                                    <p class="mb-2"><strong>What it is:</strong> The company's overall position in your screened list after combining ranks.</p>
+                                    <p><strong>How it's used:</strong> Rank #1 is the highest-scoring business balancing value and capital efficiency.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- Ticker -->
+                        <th class="p-4">Ticker</th>
+
+                        <!-- Company -->
+                        <th class="p-4">Company</th>
+
+                        <!-- Sector -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>Sector <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-64 z-50 top-full mt-2 left-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Industry Classification</p>
+                                    <p class="mb-2"><strong>What it is:</strong> The primary business sector.</p>
+                                    <p><strong>How it's used:</strong> Financials and Utilities are excluded because debt levels skew EBIT and Enterprise Value.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- EY % -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>EY % <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-72 z-50 top-full mt-2 left-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Earnings Yield (EBIT / EV)</p>
+                                    <p class="mb-2"><strong>What it is:</strong> <code class="text-emerald-300">Operating Income / Enterprise Value</code>.</p>
+                                    <p><strong>How it's used:</strong> Identifies "cheap" stocks. Accounts for corporate debt better than P/E.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- ROC % -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>ROC % <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-72 z-50 top-full mt-2 left-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Return on Capital (ROC)</p>
+                                    <p class="mb-2"><strong>What it is:</strong> <code class="text-emerald-300">EBIT / (Net Working Cap + Net Fixed Assets)</code>.</p>
+                                    <p><strong>How it's used:</strong> Identifies "good" businesses with competitive moats.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- EY Rank -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>EY Rank <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-64 z-50 top-full mt-2 left-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Earnings Yield Rank</p>
+                                    <p class="mb-2"><strong>What it is:</strong> Ordinal position ranked by EY % (Rank 1 = Highest EY).</p>
+                                    <p><strong>How it's used:</strong> The "Cheapness" factor half of the score.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- ROC Rank -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>ROC Rank <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-64 z-50 top-full mt-2 right-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Return on Capital Rank</p>
+                                    <p class="mb-2"><strong>What it is:</strong> Ordinal position ranked by ROC % (Rank 1 = Highest ROC).</p>
+                                    <p><strong>How it's used:</strong> The "Quality" factor half of the score.</p>
+                                </div>
+                            </div>
+                        </th>
+
+                        <!-- Combined -->
+                        <th class="p-4">
+                            <div class="relative group inline-block cursor-pointer">
+                                <span>Combined <span class="text-emerald-400">ⓘ</span></span>
+                                <div class="tooltip-card absolute hidden group-hover:block opacity-0 group-hover:opacity-100 bg-gray-950 text-xs text-gray-200 p-3 rounded-lg w-72 z-50 top-full mt-2 right-0 border border-emerald-500/50 shadow-2xl normal-case font-normal leading-relaxed">
+                                    <p class="font-bold text-emerald-400 mb-1">Combined Score (EY Rank + ROC Rank)</p>
+                                    <p class="mb-2"><strong>What it is:</strong> <code class="text-emerald-300">EY Rank + ROC Rank</code>.</p>
+                                    <p><strong>How it's used:</strong> Lower score is better. Finds companies striking the best balance of low valuation and high quality.</p>
+                                </div>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for row in results %}
+                    <tr class="hover:bg-gray-750 transition">
+                        <td class="p-4 font-bold text-emerald-400">#{{ row.final_rank }}</td>
+                        <td class="p-4 font-semibold text-white">{{ row.ticker }}</td>
+                        <td class="p-4">{{ row.company_name }}</td>
+                        <td class="p-4 text-gray-400">{{ row.sector }}</td>
+                        <td class="p-4 font-mono">{{ "%.2f"|format(row.earnings_yield * 100) }}%</td>
+                        <td class="p-4 font-mono">{{ "%.2f"|format(row.roc * 100) }}%</td>
+                        <td class="p-4">{{ row.ey_rank|int }}</td>
+                        <td class="p-4">{{ row.roc_rank|int }}</td>
+                        <td class="p-4 font-bold text-white">{{ row.combined_rank|int }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="p-6 text-center text-gray-400">No stock results available. Try adjusting filters or adding tickers.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
